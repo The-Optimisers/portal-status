@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Client portal status</title>
+<style>
+  :root { --ink: #1d2433; --muted: #5b6475; --line: #e3e6ec; --bg: #fafbfc; --ok: #1f7a4d; --warn: #9a5b00; --bad: #a12b2b; }
+  @media (prefers-color-scheme: dark) { :root { --ink: #e8ebf1; --muted: #a6aebd; --line: #2b3240; --bg: #12161d; } }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 640px; margin: 0 auto; padding: 48px 20px; }
+  h1 { font-size: 24px; font-weight: 600; margin: 0 0 8px; }
+  p { margin: 0 0 16px; color: var(--muted); }
+  .card { border: 1px solid var(--line); border-radius: 12px; padding: 20px; margin: 24px 0; }
+  .state { font-weight: 600; color: var(--ink); }
+  .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 8px; background: var(--muted); }
+  .ok .dot { background: var(--ok); } .warn .dot { background: var(--warn); } .bad .dot { background: var(--bad); }
+  ul { padding-left: 20px; color: var(--muted); }
+  a { color: inherit; }
+  small { color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Client portal status</h1>
+  <p>If you cannot reach your client portal, this page says whether the problem is known and how to reach your team.</p>
+
+  <div class="card" id="state" aria-live="polite">
+    <p class="state"><span class="dot"></span><span id="headline">Checking our hosting provider&hellip;</span></p>
+    <ul id="detail"></ul>
+    <small>From our hosting provider's public status page, <a href="https://www.cloudflarestatus.com/">cloudflarestatus.com</a>. <span id="checked"></span></small>
+  </div>
+
+  <div class="card">
+    <p class="state">Need something now?</p>
+    <p>Reply to the last email from your account manager, or email them directly. They can do anything the portal does, and nothing you sent through the portal is lost: messages wait and are delivered when it is back.</p>
+    <p>Your information stays safe during an outage. The portal locks rather than opens: if sign-in cannot be checked, nobody gets in.</p>
+  </div>
+</main>
+<script>
+(function () {
+  var parts = /^(access|workers|workers kv)$/i;
+  var box = document.getElementById('state'), head = document.getElementById('headline'), list = document.getElementById('detail');
+  function show(cls, text, items) {
+    box.className = 'card ' + cls; head.textContent = text; list.textContent = '';
+    (items || []).forEach(function (t) { var li = document.createElement('li'); li.textContent = t; list.appendChild(li); });
+    document.getElementById('checked').textContent = 'Checked ' + new Date().toLocaleString() + '.';
+  }
+  fetch('https://www.cloudflarestatus.com/api/v2/summary.json', { cache: 'no-store' })
+    .then(function (r) { return r.json(); })
+    .then(function (j) {
+      var down = (j.components || []).filter(function (c) { return parts.test(c.name) && c.status !== 'operational'; })
+        .map(function (c) { return c.name + ': ' + c.status.split('_').join(' '); });
+      var inc = (j.incidents || []).filter(function (i) { return /access|workers/i.test(i.name) && i.status !== 'resolved'; })
+        .map(function (i) { return i.name + ' (' + i.status + ')'; });
+      if (!down.length && !inc.length) show('ok', 'No known problem at our hosting provider.', ['If the portal still will not load, email your account manager: it may be on your side, or ours.']);
+      else show(down.some(function (d) { return /outage/.test(d); }) ? 'bad' : 'warn', 'Our hosting provider is reporting a problem. The portal may be slow or unavailable.', down.concat(inc));
+    })
+    .catch(function () { show('', 'We could not check our hosting provider just now.', ['Email your account manager if you need anything.']); });
+})();
+</script>
+</body>
+</html>
