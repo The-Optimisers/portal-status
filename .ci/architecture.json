@@ -1,0 +1,21 @@
+{
+  "schema": "optimisers-architecture/v1",
+  "generatedBy": "agency-os-agents tools/arch_declare.cjs from brain/manifests/*.json. Do not edit here: edit the manifest there and re-run tools/ci_fleet_sync.cjs.",
+  "repo": "portal-status",
+  "ratchet": "2026-12-19",
+  "workersDevSubdomain": "jennifer-c3d",
+  "knownWorkers": [
+    "agents-airtable-proxy",
+    "airtable-proxy",
+    "delivery-proxy",
+    "lead-intake",
+    "nzbiz-schedule",
+    "optimisers-client-portal",
+    "pipedrive-proxy",
+    "qwilr-accept-hook",
+    "qwilr-bridge",
+    "sem-signoff"
+  ],
+  "components": [],
+  "none": "one static public page: no Worker, nothing deployed by this repo"
+}
