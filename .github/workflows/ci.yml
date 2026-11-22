@@ -5,7 +5,7 @@
 #   1. the shared guards (secret scan, laptop-path ceiling, client-data guard, NOT RUN ceiling)
 #   2. the repo's own tests, if .ci/ci.json names a test command
 #   3. a Cloudflare Worker build that deploys nothing, if .ci/ci.json says the repo is a Worker
-#   4. security scans: secrets across all history, known-vulnerable dependencies, code patterns, and an SBOM
+#   4. security scans (own job, always on Ubuntu): secrets across all history, vulnerable dependencies, code, SBOM
 # Each step runs even when an earlier one failed, so one push shows every red at once.
 name: ci
 on: [push, pull_request]
@@ -20,8 +20,6 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262   # v4, pinned by sha 22-Nov-2026
-        with:
-          fetch-depth: 0   # the secret scan reads every commit, not only the last one
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020   # v4, pinned by sha 22-Nov-2026
         with:
           node-version: "24"
@@ -58,6 +56,22 @@ jobs:
       - name: Worker build (dry run, deploys nothing)
         if: always() && steps.cfg.outputs.worker == 'yes'
         run: npx --yes "wrangler@${{ steps.cfg.outputs.wrangler }}" deploy --dry-run --outdir .ci-dist
+
+  # 22-Nov-2026 (compliance-scan): the scan is its OWN job on Ubuntu for every repo. Repos whose check job runs on
+  # windows-latest (cockpit-workspaces, live-automation-code, sem-pacing-ops, meta-ads-preview-tool) failed with the scan
+  # inside it: PowerShell is the default shell there, and the scanners are Linux binaries (semgrep has no Windows build).
+  # runs-on is written in ARRAY form on purpose: tools/ci_fleet_sync.cjs swaps only the check job's one-value runner
+  # line for a row's runner (text match), so this job always stays on Ubuntu.
+  security:
+    runs-on: [ubuntu-latest]
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262   # v4, pinned by sha 22-Nov-2026
+        with:
+          fetch-depth: 0   # the secret scan reads every commit, not only the last one
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020   # v4, pinned by sha 22-Nov-2026
+        with:
+          node-version: "24"
 
       # >>> security-scan (tools/check_security_scan_twin.cjs holds .github/workflows/security.yml in agency-os-agents to
       # this block byte for byte; edit here and copy there)
