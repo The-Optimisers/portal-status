@@ -48,6 +48,9 @@ function isSpace(c) { return c === ' ' || c === '\t' || c === '\r' || c === '\n'
 function uniqSorted(a) { return Array.from(new Set(a)).sort(); }
 function diff(a, b) { const sb = new Set(b); return uniqSorted(a.filter((x) => !sb.has(x))); }
 
+// semgrep triage (22-Nov-2026, compliance-scan): the path-join-resolve-traversal lines marked nosemgrep build paths
+// from the repo this tool runs in (its wrangler files, import specifiers, .ci/architecture.json), in CI only, with no
+// outside input. setPath is safe because keyPath refuses __proto__, constructor and prototype (self-test TOML_PROTO).
 // ---------------------------------------------------------------- TOML (the subset wrangler files use)
 function tomlParse(text) {
     const root = {};
@@ -58,7 +61,9 @@ function tomlParse(text) {
     function skipWs(nl) { while (i < n) { const c = text[i]; if (c === ' ' || c === '\t' || c === '\r' || (nl && c === '\n')) i++; else if (c === '#') { while (i < n && text[i] !== '\n') i++; } else break; } }
     function bareKey() { const s = i; while (i < n && (isId(text[i]) || text[i] === '-')) i++; if (s === i) err('expected a key'); return text.slice(s, i); }
     function key() { skipWs(false); if (text[i] === '"' || text[i] === "'") return str(); return bareKey(); }
-    function keyPath() { const ks = [key()]; skipWs(false); while (text[i] === '.') { i++; ks.push(key()); skipWs(false); } return ks; }
+    function keyPath() { const ks = [key()]; skipWs(false); while (text[i] === '.') { i++; ks.push(key()); skipWs(false); }
+        for (const k of ks) if (k === '__proto__' || k === 'constructor' || k === 'prototype') err('key not allowed: ' + k);
+        return ks; }
     function str() {
         const q = text[i];
         if (text.startsWith(q + q + q, i)) {
@@ -94,7 +99,7 @@ function tomlParse(text) {
         const num = Number(raw.split('_').join('')); if (raw !== '' && !Number.isNaN(num)) return num;
         return raw; // dates and anything else: kept as text, never interpreted
     }
-    function setPath(obj, ks, v) { let o = obj; for (let k = 0; k < ks.length - 1; k++) { if (o[ks[k]] === undefined) o[ks[k]] = {}; o = o[ks[k]]; } o[ks[ks.length - 1]] = v; }
+    function setPath(obj, ks, v) { let o = obj; for (let k = 0; k < ks.length - 1; k++) { if (o[ks[k]] === undefined) o[ks[k]] = {}; o = o[ks[k]]; } o[ks[ks.length - 1]] = v; }   // nosemgrep: javascript.lang.security.audit.prototype-pollution.prototype-pollution-loop.prototype-pollution-loop
     function walkTo(ks, arrayTable) {
         let o = root;
         for (let k = 0; k < ks.length; k++) {
@@ -148,7 +153,7 @@ function jsoncParse(text) {
 }
 
 // ---------------------------------------------------------------- wrangler facts
-function findWrangler(dir) { for (const f of WRANGLER_NAMES) { const p = path.join(dir, f); if (fs.existsSync(p)) return p; } return null; }
+function findWrangler(dir) { for (const f of WRANGLER_NAMES) { const p = path.join(dir, f); if (fs.existsSync(p)) return p; } return null; }   // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal
 function readWrangler(file) {
     const text = fs.readFileSync(file, 'utf8');
     return file.endsWith('.toml') ? tomlParse(text) : jsoncParse(text);
@@ -206,8 +211,8 @@ function importSpecs(src) {
     return { specs: specs.filter((s) => s.startsWith('./') || s.startsWith('../')), dynamic };
 }
 function resolveSpec(fromFile, spec) {
-    const base = path.resolve(path.dirname(fromFile), spec);
-    const tries = [base].concat(CODE_EXT.map((e) => base + e)).concat(CODE_EXT.map((e) => path.join(base, 'index' + e)));
+    const base = path.resolve(path.dirname(fromFile), spec);   // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal
+    const tries = [base].concat(CODE_EXT.map((e) => base + e)).concat(CODE_EXT.map((e) => path.join(base, 'index' + e)));   // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal
     for (const t of tries) if (fs.existsSync(t) && fs.statSync(t).isFile()) return t;
     return null;
 }
@@ -311,7 +316,7 @@ function checkRepo(root, opts) {
     opts = opts || {};
     const rows = [];
     const add = (verdict, comp, rule, detail) => rows.push({ verdict, comp, rule, detail });
-    const declFile = opts.declFile ? path.resolve(opts.declFile) : path.join(root, '.ci', 'architecture.json');
+    const declFile = opts.declFile ? path.resolve(opts.declFile) : path.join(root, '.ci', 'architecture.json');   // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal
     if (!fs.existsSync(declFile)) {
         add('NOT DECLARED', '-', 'declaration', '.ci/architecture.json absent: add a brain manifest with "repo" set to this repo in agency-os-agents, then run tools/ci_fleet_sync.cjs');
         return { rows, ratchet: ARCH_RATCHET };
@@ -330,7 +335,7 @@ function checkRepo(root, opts) {
     for (const c of comps) {
         const name = c.name;
         if (c.runtime !== 'cloudflare-worker') { add('UNKNOWN', name, 'runtime', 'no reader for runtime ' + c.runtime + ' yet; not proved'); continue; }
-        const croot = path.join(root, c.root || '.');
+        const croot = path.join(root, c.root || '.');   // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal
         claimedRoots.add((c.root || '.').split('\\').join('/'));
         const w = c.wrangler;
         if (!w) { add('UNKNOWN', name, 'wrangler', 'manifest declares no wrangler block; nothing to compare'); continue; }
@@ -354,7 +359,7 @@ function checkRepo(root, opts) {
         same('services', (w.services || []).map((s) => s.binding + '->' + s.service), f.services, wn);
 
         const mainRel = f.main || w.main || '';
-        const mainFile = mainRel ? path.join(croot, mainRel) : '';
+        const mainFile = mainRel ? path.join(croot, mainRel) : '';   // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal
         if (!mainFile || !fs.existsSync(mainFile)) { add('FAIL', name, 'main', 'main ' + JSON.stringify(mainRel) + ' not found'); continue; }
         const g = reachable(mainFile);
         let reads = [], unk = [], hosts = [], named = [];
@@ -394,7 +399,7 @@ function checkRepo(root, opts) {
     for (const r of listWranglers(root)) if (!claimedRoots.has(r)) add('FAIL', '-', 'components', 'wrangler config in ' + r + ' belongs to no declared component');
 
     if (decl.fleetWorkers) {
-        const rf = path.join(root, 'registry.json');
+        const rf = path.join(root, 'registry.json');   // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal
         if (!fs.existsSync(rf)) add('FAIL', '-', 'registry', 'declaration carries fleetWorkers but registry.json is absent');
         else {
             let reg; try { reg = JSON.parse(fs.readFileSync(rf, 'utf8')); } catch (e) { reg = null; add('UNKNOWN', '-', 'registry', 'registry.json does not parse: ' + e.message); }
@@ -429,7 +434,7 @@ function summarise(res, today) {
 function scaffold(dir) {
     const wf = findWrangler(dir); if (!wf) throw new Error('no wrangler config in ' + dir);
     const f = wranglerFacts(readWrangler(wf));
-    const g = reachable(path.join(dir, f.main));
+    const g = reachable(path.join(dir, f.main));   // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal
     let reads = [], hosts = [], named = [];
     for (const file of g.files) { const src = stripJsComments(fs.readFileSync(file, 'utf8')); reads = reads.concat(envReads(src).names); hosts = hosts.concat(workersDevHosts(fetchArgs(src), '')); named = named.concat(workersDevHosts(src, '')); }
     hosts = hosts.concat(workersDevHosts(f.varValues.join('\n'), ''));
@@ -537,6 +542,10 @@ function selfTest() {
     const s2 = summarise({ rows: [{ verdict: 'FAIL' }], ratchet: '2026-12-19' }, '2026-12-19');
     const s3 = summarise({ rows: [{ verdict: 'NOT DECLARED' }], ratchet: '2026-12-19' }, '2026-12-20');
     const s4 = summarise({ rows: [{ verdict: 'UNKNOWN' }, { verdict: 'PASS' }], ratchet: '2026-12-19' }, '2026-12-20');
+    const protoRefused = (t) => { try { tomlParse(t); return false; } catch (e) { return e.message.indexOf('key not allowed') >= 0 && ({}).polluted === undefined; } };
+    results.push({ name: 'TOML_PROTO: a __proto__, constructor or prototype key is refused, never written',
+                   ok: ((NL) => protoRefused('[__proto__]' + NL + 'polluted = 1' + NL) && protoRefused('a.__proto__.polluted = 1' + NL)
+                       && protoRefused('x = { constructor = 1 }' + NL))(String.fromCharCode(10)) && ({}).polluted === undefined });
     results.push({ name: 'RATCHET: advisory (exit 0) before the date; FAIL and NOT DECLARED exit 1 from it; UNKNOWN alone is never a pass and exits 0',
                    ok: s1.code === 0 && s2.code === 1 && s3.code === 1 && s4.code === 0 && s4.worst === 'UNKNOWN' });
     try { fs.rmSync(tmp, { recursive: true, force: true }); } catch { /* temp only */ }
