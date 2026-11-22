@@ -1,0 +1,6 @@
+# client data and laptop state never live in git (organisation plan, 2-Nov-2026)
+.out/
+.dev.vars
+*.dpapi
+*.env
+scan_results.json

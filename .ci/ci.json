@@ -1,0 +1,10 @@
+{
+  "repo": "portal-status",
+  "kind": "static-site",
+  "test": null,
+  "worker": false,
+  "wrangler": "4.130.0",
+  "notRun": 0,
+  "notRunMax": 0,
+  "generatedBy": "agency-os-agents tools/ci_fleet_sync.cjs from formation/ci_matrix.json"
+}
