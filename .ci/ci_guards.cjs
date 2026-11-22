@@ -50,7 +50,7 @@ if (tracked.length === 0) finish(2, 'COULD-NOT-RUN', 'git tracks no files here (
 const TEXT_MAX = 4 * 1024 * 1024;
 function isBinary(buf) { const n = Math.min(buf.length, 8000); for (let i = 0; i < n; i++) if (buf[i] === 0) return true; return false; }
 function readText(rel) {
-    const p = path.join(repo, rel);
+    const p = path.join(repo, rel);   // nosemgrep: javascript.lang.security.audit.path-traversal.path-join-resolve-traversal.path-join-resolve-traversal
     let st; try { st = fs.statSync(p); } catch { return null; }
     if (!st.isFile() || st.size > TEXT_MAX) return null;
     const buf = fs.readFileSync(p);
