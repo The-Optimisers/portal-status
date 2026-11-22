@@ -64,7 +64,7 @@ jobs:
   # line for a row's runner (text match), so this job always stays on Ubuntu.
   security:
     runs-on: [ubuntu-latest]
-    timeout-minutes: 20
+    timeout-minutes: 45   # 22-Nov-2026: cockpit-workspaces (1,282 files, full history) was cancelled at 20; agency-os-agents takes 11
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262   # v4, pinned by sha 22-Nov-2026
         with:
