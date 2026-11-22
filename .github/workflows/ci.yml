@@ -135,6 +135,16 @@ jobs:
           const HEX = "0123456789abcdef", UP = "ABCDEFGHIJKLMNOPQRSTUVWXYZ", LO = "abcdefghijklmnopqrstuvwxyz", DIG = "0123456789";
           const AN = UP + LO + DIG, AT = ["tbl", "fld", "rec", "app", "viw", "wac", "wfl", "sel", "usr", "ent", "pag"];
           const all = (s, set) => s.length > 0 && [...s].every((c) => set.includes(c));
+          // 22-Nov-2026: in git mode gitleaks leaves Line empty, so the flagged line is read from the checkout (git show, cached
+          // per file version). A line that cannot be read stays empty, so its hit stays unexplained.
+          const cp = require("child_process"), blobs = {};
+          function lineOf(r) {
+            if (r.Line) return String(r.Line);
+            const key = String(r.Commit) + ":" + String(r.File);
+            if (!(key in blobs)) { try { blobs[key] = cp.execFileSync("git", ["show", key], { encoding: "utf8", maxBuffer: 1 << 28, stdio: ["ignore", "pipe", "ignore"] }).split("\n"); } catch (e) { blobs[key] = null; } }
+            const L = blobs[key]; return L && typeof L[r.StartLine - 1] === "string" ? L[r.StartLine - 1] : "";
+          }
+          function keyLine(line) { let t = String(line || "").trimStart(); if (t.startsWith("+")) t = t.slice(1).trimStart(); return t; }
           function kind(s, line) {
             if (s.length === 17 && AT.includes(s.slice(0, 3)) && all(s, AN)) return "airtable-id";
             if ((s.length === 40 || s.length === 64) && all(s.toLowerCase(), HEX)) return "sha-or-hash";
@@ -144,12 +154,12 @@ jobs:
             const w = s.split("-").join("_").split("_").filter((x) => x.length);
             if (w.length && w.every((x) => all(x, LO))) return "lowercase-words";
             // 22-Nov-2026: Airtable sync keys in billing snapshots (live-automation-code, xero-sync: about 1,100 hits). By key name, literally.
-            if (s.length >= 20 && s.length <= 24 && all(s, AN + "-") && String(line || "").trimStart().startsWith('"Sync Key":')) return "sync-key";
+            if (s.length >= 20 && s.length <= 24 && all(s, AN + "-") && keyLine(line).startsWith('"Sync Key":')) return "sync-key";
             return "unexplained";
           }
           const counts = {}; const unexplained = [];
           const safe = rows.map((r) => {
-            const k = kind(String(r.Secret || ""), r.Line);
+            const k = kind(String(r.Secret || ""), lineOf(r));
             counts[k] = (counts[k] || 0) + 1;
             const o = Object.assign({}, r, { Secret: "REDACTED", Match: "REDACTED", Line: "REDACTED", Triage: k });
             if (k === "unexplained") unexplained.push(o.RuleID + " " + o.File + ":" + o.StartLine + " " + String(o.Commit).slice(0, 8) + " fingerprint " + o.Fingerprint);
